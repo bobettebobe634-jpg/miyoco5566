@@ -71,7 +71,7 @@
   <script>
     /* ====== 設定 ====== */
     const PASSWORD = "marcy95";
-    const API_URL = "https://script.google.com/macros/library/d/1kn2AwYZXMw2zmg0PzlSe4yGXkQe6lXhnmI4QrwMRqtyh9XcmmgZqgdpL/1";
+    const API_URL = "https://script.google.com/macros/s/AKfycbzFXnH7OvrIa70D6fz3c-ExZxXOtnz3bSC-EOoQA4Kko9qx2I8lhsIrKDILFscNQHmmAA/exec";
     let isLoggedIn = false;
 
     /* ====== 狀態變數 ====== */
@@ -192,12 +192,14 @@
       try {
         await fetch(API_URL, {
           method: 'POST',
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newDevice)
         });
         await fetchDevices(); // 更新畫面
         closeModal();
       } catch(e){
         console.error("寫入資料錯誤", e);
+        alert("寫入資料錯誤，請檢查 API_URL 或 Apps Script 權限");
       }
     }
 
