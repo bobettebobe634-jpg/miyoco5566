@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>公司設備管理</title>
+  <style>
+    body {font-family:"Microsoft JhengHei",sans-serif;background:#f7f9fc;margin:0;padding:20px;}
+    h1{text-align:center;color:#333;}
+    table{width:100%;border-collapse:collapse;background:white;margin-top:20px;}
+    th,td{border:1px solid #ddd;padding:10px;text-align:center;}
+    th{background:#f0f0f0;cursor:pointer;}
+    tr.highlight {background:#e0e0e0;}
+    .btn-area{text-align:center;margin-top:15px;}
+    .btn-area button{padding:8px 15px;background:#4caf50;color:white;border:none;border-radius:5px;cursor:pointer;margin:0 8px;}
+    #editModal,#locationModal,#loginModal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,.3);}
+    #editModal input,#locationModal input,#loginModal input{margin:5px 0;padding:6px;width:100%;}
+    #editModal button,#locationModal button,#loginModal button{margin-top:10px;padding:6px 12px;}
+    .location-item{display:flex;justify-content:space-between;align-items:center;background:#f5f5f5;padding:5px 10px;margin:3px 0;border-radius:4px;}
+    .delete-loc{background:red;color:white;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;}
+  </style>
+</head>
+<body>
+  <h1>公司設備管理</h1>
+
+  <!-- 功能按鈕 -->
+  <div class="btn-area">
+    <button id="addDeviceBtn">新增設備</button>
+    <button id="manageLocBtn">常態位置</button>
+  </div>
+
+  <!-- 表格 -->
+  <table id="deviceTable">
+    <thead>
+      <tr>
+        <th onclick="sortTable('name')">設備 ⬍</th>
+        <th onclick="sortTable('location')">目前位置 ⬍</th>
+        <th onclick="sortTable('time')">累計時長 ⬍</th>
+      </tr>
+    </thead>
+    <tbody id="deviceBody"></tbody>
+  </table>
+
+  <!-- 新增設備彈窗 -->
+  <div id="editModal">
+    <h3>新增設備</h3>
+    <label>設備名稱：</label><br>
+    <input type="text" id="editName"><br>
+    <label>目前位置：</label><br>
+    <input type="text" id="editLocation"><br>
+    <button onclick="saveEdit()">儲存</button>
+    <button onclick="closeModal()">取消</button>
+  </div>
+
+  <!-- 管理常態位置彈窗 -->
+  <div id="locationModal">
+    <h3>管理常態位置</h3>
+    <div id="locationList"></div>
+    <input type="text" id="newLoc" placeholder="新增位置名稱">
+    <button onclick="addLocation()">新增</button>
+    <button onclick="closeLocationModal()">關閉</button>
+  </div>
+
+  <!-- 密碼登入彈窗 -->
+  <div id="loginModal">
+    <h3>請輸入密碼</h3>
+    <input type="password" id="passwordInput" placeholder="輸入密碼">
+    <button onclick="checkPassword()">確認</button>
+    <button onclick="closeLoginModal()">取消</button>
+  </div>
+
+  <script>
+    const PASSWORD = "marcy95";
+    let isLoggedIn = false;
+
+    let devices = JSON.parse(localStorage.getItem("devices")) || [];
+    if (!Array.isArray(devices)) devices = [];
+    let normalLocations = JSON.parse(localStorage.getItem("normalLocations")) || [];
+    if (!Array.isArray(normalLocations)) normalLocations = [];
+    let sortState = {name: 'asc', location: 'asc', time: 'asc'};
+
+    const addBtn = document.getElementById('addDeviceBtn');
+    const locBtn = document.getElementById('manageLocBtn');
+    const body = document.getElementById('deviceBody');
+    const modal = document.getElementById('editModal');
+    const editName = document.getElementById('editName');
+    const editLocation = document.getElementById('editLocation');
+    const locModal = document.getElementById('locationModal');
+    const locList = document.getElementById('locationList');
+    const newLocInput = document.getElementById('newLoc');
+    const loginModal = document.getElementById('loginModal');
+    const passwordInput = document.getElementById('passwordInput');
+
+    /* 儲存 */
+    function saveDevices(){ localStorage.setItem("devices", JSON.stringify(devices)); }
+    function saveLocations(){ localStorage.setItem("normalLocations", JSON.stringify(normalLocations)); }
+
+    /* 時長格式 */
+    function formatDuration(ms){
+      let sec = Math.floor(ms/1000);
+      let days = Math.floor(sec / 86400);
+      sec %= 86400;
+      let hrs = Math.floor(sec / 3600);
+      sec %= 3600;
+      let mins = Math.floor(sec / 60);
+      sec %= 60;
+      return `${String(days).padStart(2,'0')}:${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    }
+
+    /* 畫表格 */
+    function render(){
+      body.innerHTML = '';
+      devices.forEach((d)=>{
+        const tr = document.createElement('tr');
+        tr.onclick = ()=>{ highlightRow(tr); };
+        let timeCell = normalLocations.includes((d.location||"").trim()) ? "N/A" : formatDuration(Date.now() - d.createdAt);
+        tr.innerHTML = `<td>${d.name}</td><td>${d.location||""}</td><td>${timeCell}</td>`;
+        body.appendChild(tr);
+      });
+    }
+
+    function highlightRow(row){
+      [...body.children].forEach(r=>r.classList.remove("highlight"));
+      row.classList.add("highlight");
+    }
+
+    /* 排序 */
+    function sortTable(key){
+      let direction = sortState[key] === 'asc' ? 1 : -1;
+      if(key === 'name' || key === 'location'){
+        devices.sort((a,b)=> (a[key]||"").localeCompare(b[key]||"") * direction);
+      }else if(key === 'time'){
+        devices.sort((a,b)=>{
+          const ta = normalLocations.includes((a.location||"").trim()) ? Infinity : (Date.now()-a.createdAt);
+          const tb = normalLocations.includes((b.location||"").trim()) ? Infinity : (Date.now()-b.createdAt);
+          return (ta - tb) * direction;
+        });
+      }
+      sortState[key] = sortState[key] === 'asc' ? 'desc' : 'asc';
+      render();
+    }
+
+    /* 新增設備 */
+    addBtn.addEventListener('click', ()=>{
+      if(!isLoggedIn){ showLogin(openAddModal); return; }
+      openAddModal();
+    });
+
+    function showLogin(nextAction){
+      window.afterLoginSuccess = nextAction;
+      loginModal.style.display = "block";
+      passwordInput.value = '';
+    }
+
+    function checkPassword(){
+      if(passwordInput.value === PASSWORD){
+        alert("✅ 密碼正確，已解鎖");
+        isLoggedIn = true;
+        loginModal.style.display = "none";
+        if(window.afterLoginSuccess) window.afterLoginSuccess();
+      }else{
+        alert("❌ 密碼錯誤");
+      }
+    }
+
+    function closeLoginModal(){ loginModal.style.display = "none"; }
+
+    function openAddModal(){
+      editName.value = '';
+      editLocation.value = '';
+      modal.style.display = "block";
+    }
+
+    function saveEdit(){
+      if(!editName.value){alert("設備名稱必填");return;}
+      devices.push({name: editName.value, location: editLocation.value, createdAt: Date.now()});
+      saveDevices(); render(); closeModal();
+    }
+
+    function closeModal(){ modal.style.display="none"; }
+
+    /* 常態位置管理 */
+    locBtn.addEventListener('click', ()=>{
+      if(!isLoggedIn){ showLogin(openLocModal); return; }
+      openLocModal();
+    });
+
+    function openLocModal(){
+      renderLocList();
+      locModal.style.display="block";
+    }
+
+    function renderLocList(){
+      locList.innerHTML = '';
+      normalLocations.forEach((loc,idx)=>{
+        const div = document.createElement('div');
+        div.className = 'location-item';
+        div.innerHTML = `<span>${loc}</span><button class="delete-loc" onclick="deleteLocation(${idx})">刪除</button>`;
+        locList.appendChild(div);
+      });
+    }
+
+    function addLocation(){
+      const val = newLocInput.value.trim();
+      if(!val) return;
+      if(!normalLocations.includes(val)){
+        normalLocations.push(val);
+        saveLocations(); renderLocList(); render();
+      }
+      newLocInput.value='';
+    }
+
+    function deleteLocation(i){
+      normalLocations.splice(i,1);
+      saveLocations(); renderLocList(); render();
+    }
+
+    function closeLocationModal(){ locModal.style.display="none"; }
+
+    render();
+  </script>
+</body>
+</html>
