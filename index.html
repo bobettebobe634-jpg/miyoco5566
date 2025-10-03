@@ -22,13 +22,11 @@
 <body>
   <h1>公司設備管理</h1>
 
-  <!-- 功能按鈕 -->
   <div class="btn-area">
     <button id="addDeviceBtn">新增設備</button>
     <button id="manageLocBtn">常態位置</button>
   </div>
 
-  <!-- 表格 -->
   <table id="deviceTable">
     <thead>
       <tr>
@@ -70,11 +68,11 @@
 
   <script>
     /* ====== 設定 ====== */
-    const PASSWORD = "aaa";
-    // 改成你剛剛 Network Headers 裡「location」完整網址
-    const API_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhabnZf4CQrC48mGzM3r6jbTVHdkGDTCYkAjI5yTWm_qx_fYQsUOFCPMn0POmSq-G3DqhtuasmS8XETBcMoe0wa-3yEPyiymT9Ph7Vozgz2REONzti2WX3WOswPHMdNFB8lsomXr-KpSznoRAP2mD4BW46gZsPQ2XCDzCiq8zS_q32Rp0mJFq1VoZ750dtyOydRS_gVC-wgvAL1M2h0rWdrs0IZ_xZRTfGcp6JAbXbRJKKLyblEnr0xUv7JWVogKYYHvatw8-ctFg0abZ1nDF7sVjjNK9KggssLXYSb&lib=MCUHDJY-ulsel3hnmE-BHnEMRrvaDtE02";
-
+    const PASSWORD = "marcy95";  // 你的解鎖密碼
+    const API_URL = "https://script.google.com/macros/s/AKfycbzFXnH7OvrIa70D6fz3c-ExZxXOtnz3bSC-EOoQA4Kko9qx2I8lhsIrKDILFscNQHmmAA/exec";
     let isLoggedIn = false;
+
+    /* ====== 狀態變數 ====== */
     let devices = [];
     let normalLocations = JSON.parse(localStorage.getItem("normalLocations")) || [];
     if (!Array.isArray(normalLocations)) normalLocations = [];
@@ -104,6 +102,7 @@
       }
     }
 
+    /* ====== 時長格式化 ====== */
     function formatDuration(ms){
       let sec = Math.floor(ms/1000);
       let days = Math.floor(sec / 86400);
@@ -115,6 +114,7 @@
       return `${String(days).padStart(2,'0')}:${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
     }
 
+    /* ====== 畫表格 ====== */
     function render(){
       body.innerHTML = '';
       devices.forEach((d)=>{
@@ -131,6 +131,7 @@
       row.classList.add("highlight");
     }
 
+    /* ====== 排序 ====== */
     function sortTable(key){
       let direction = sortState[key] === 'asc' ? 1 : -1;
       if(key === 'name' || key === 'location'){
@@ -146,6 +147,7 @@
       render();
     }
 
+    /* ====== 密碼登入 ====== */
     addBtn.addEventListener('click', ()=>{
       if(!isLoggedIn){ showLogin(openAddModal); return; }
       openAddModal();
@@ -175,6 +177,7 @@
 
     function closeLoginModal(){ loginModal.style.display = "none"; }
 
+    /* ====== 新增設備 ====== */
     function openAddModal(){
       editName.value = '';
       editLocation.value = '';
@@ -190,16 +193,18 @@
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify(newDevice)
         });
+        // 即使 POST response CORS 受限，也先刷新 GET
         await fetchDevices();
         closeModal();
       } catch(e){
-        alert("⚠️ 寫入資料錯誤，請檢查 API_URL 或 Apps Script 權限");
         console.error("寫入資料錯誤", e);
+        alert("寫入失敗，請檢查 API URL 或 Apps Script 部署");
       }
     }
 
     function closeModal(){ modal.style.display="none"; }
 
+    /* ====== 常態位置 ====== */
     function openLocModal(){
       renderLocList();
       locModal.style.display="block";
@@ -234,6 +239,7 @@
 
     function closeLocationModal(){ locModal.style.display="none"; }
 
+    /* ====== 初始化 ====== */
     fetchDevices();
   </script>
 </body>
