@@ -69,11 +69,13 @@
   </div>
 
   <script>
+    /* ====== 設定 ====== */
     const PASSWORD = "marcy95";
+    const API_URL = "https://script.google.com/macros/library/d/1kn2AwYZXMw2zmg0PzlSe4yGXkQe6lXhnmI4QrwMRqtyh9XcmmgZqgdpL/1";
     let isLoggedIn = false;
 
-    let devices = JSON.parse(localStorage.getItem("devices")) || [];
-    if (!Array.isArray(devices)) devices = [];
+    /* ====== 狀態變數 ====== */
+    let devices = [];
     let normalLocations = JSON.parse(localStorage.getItem("normalLocations")) || [];
     if (!Array.isArray(normalLocations)) normalLocations = [];
     let sortState = {name: 'asc', location: 'asc', time: 'asc'};
@@ -90,11 +92,19 @@
     const loginModal = document.getElementById('loginModal');
     const passwordInput = document.getElementById('passwordInput');
 
-    /* 儲存 */
-    function saveDevices(){ localStorage.setItem("devices", JSON.stringify(devices)); }
-    function saveLocations(){ localStorage.setItem("normalLocations", JSON.stringify(normalLocations)); }
+    /* ====== 從 Google Sheets 抓資料 ====== */
+    async function fetchDevices() {
+      try {
+        const res = await fetch(API_URL);
+        devices = await res.json();
+        devices.forEach(d => d.createdAt = Number(d.createdAt));
+        render();
+      } catch(e) {
+        console.error("讀取資料錯誤", e);
+      }
+    }
 
-    /* 時長格式 */
+    /* ====== 時長格式化 ====== */
     function formatDuration(ms){
       let sec = Math.floor(ms/1000);
       let days = Math.floor(sec / 86400);
@@ -106,7 +116,7 @@
       return `${String(days).padStart(2,'0')}:${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
     }
 
-    /* 畫表格 */
+    /* ====== 畫表格 ====== */
     function render(){
       body.innerHTML = '';
       devices.forEach((d)=>{
@@ -123,7 +133,7 @@
       row.classList.add("highlight");
     }
 
-    /* 排序 */
+    /* ====== 排序 ====== */
     function sortTable(key){
       let direction = sortState[key] === 'asc' ? 1 : -1;
       if(key === 'name' || key === 'location'){
@@ -139,10 +149,15 @@
       render();
     }
 
-    /* 新增設備 */
+    /* ====== 密碼登入 ====== */
     addBtn.addEventListener('click', ()=>{
       if(!isLoggedIn){ showLogin(openAddModal); return; }
       openAddModal();
+    });
+
+    locBtn.addEventListener('click', ()=>{
+      if(!isLoggedIn){ showLogin(openLocModal); return; }
+      openLocModal();
     });
 
     function showLogin(nextAction){
@@ -164,26 +179,31 @@
 
     function closeLoginModal(){ loginModal.style.display = "none"; }
 
+    /* ====== 新增設備 ====== */
     function openAddModal(){
       editName.value = '';
       editLocation.value = '';
       modal.style.display = "block";
     }
 
-    function saveEdit(){
+    async function saveEdit(){
       if(!editName.value){alert("設備名稱必填");return;}
-      devices.push({name: editName.value, location: editLocation.value, createdAt: Date.now()});
-      saveDevices(); render(); closeModal();
+      const newDevice = {name: editName.value, location: editLocation.value, createdAt: Date.now()};
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          body: JSON.stringify(newDevice)
+        });
+        await fetchDevices(); // 更新畫面
+        closeModal();
+      } catch(e){
+        console.error("寫入資料錯誤", e);
+      }
     }
 
     function closeModal(){ modal.style.display="none"; }
 
-    /* 常態位置管理 */
-    locBtn.addEventListener('click', ()=>{
-      if(!isLoggedIn){ showLogin(openLocModal); return; }
-      openLocModal();
-    });
-
+    /* ====== 常態位置 ====== */
     function openLocModal(){
       renderLocList();
       locModal.style.display="block";
@@ -204,19 +224,22 @@
       if(!val) return;
       if(!normalLocations.includes(val)){
         normalLocations.push(val);
-        saveLocations(); renderLocList(); render();
+        localStorage.setItem("normalLocations", JSON.stringify(normalLocations));
+        renderLocList(); render();
       }
       newLocInput.value='';
     }
 
     function deleteLocation(i){
       normalLocations.splice(i,1);
-      saveLocations(); renderLocList(); render();
+      localStorage.setItem("normalLocations", JSON.stringify(normalLocations));
+      renderLocList(); render();
     }
 
     function closeLocationModal(){ locModal.style.display="none"; }
 
-    render();
+    /* ====== 初始化 ====== */
+    fetchDevices();
   </script>
 </body>
 </html>
