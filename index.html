@@ -1,177 +1,434 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>公司設備管理</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { background: #f8f9fa; }
-    .container { max-width: 900px; margin-top: 40px; }
-    .device-row.inactive { color: #888; cursor: pointer; }
-    .modal-header { background: #0d6efd; color: white; }
+    body{font-family:"Microsoft JhengHei",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f7f9fc;margin:0;padding:24px;}
+    h1{margin:0 0 8px;color:#222;text-align:center}
+    .sub{color:#666;text-align:center;margin-bottom:18px}
+    .bar{display:flex;gap:8px;justify-content:center;margin:8px 0 16px}
+    button{padding:8px 14px;border:0;border-radius:8px;cursor:pointer}
+    .pri{background:#2563eb;color:#fff}
+    .ok{background:#16a34a;color:#fff}
+    .muted{background:#e5e7eb}
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden}
+    th,td{border-bottom:1px solid #eee;padding:12px 10px;text-align:center}
+    th{background:#f3f4f6;font-weight:600;user-select:none;cursor:pointer;position:relative}
+    th .arrow{font-size:12px;margin-left:6px;opacity:.7}
+    tr:hover{background:#fafafa}
+    tr.editable{color:#555}
+    tr.editable:hover{background:#eef2ff}
+    .tag{display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;padding:2px 8px;font-size:12px}
+    .danger{background:#ef4444;color:#fff}
+    .hidden{display:none}
+    /* modal */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:50}
+    .card{width:min(520px,92vw);background:#fff;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.15);overflow:hidden}
+    .card h3{margin:0;padding:14px 16px;background:#111827;color:#fff}
+    .card .body{padding:16px}
+    .row{display:flex;gap:10px;margin-bottom:10px}
+    .row > *{flex:1}
+    input,select{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px}
+    .footer{display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #eee;background:#fafafa}
+    .err{color:#ef4444;font-size:13px;margin-top:6px;min-height:18px}
+    .loc-item{display:flex;align-items:center;justify-content:space-between;background:#f3f4f6;border-radius:8px;padding:8px 10px;margin-bottom:6px}
+    .pill{font-size:12px;padding:2px 8px;border-radius:999px;background:#e5e7eb}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2 class="text-center mb-4">公司設備管理</h2>
-    <div class="mb-3 text-center">
-      <button class="btn btn-success" id="btnAdd">新增設備</button>
-      <button class="btn btn-primary" id="btnDefaultLoc">常態位置</button>
-    </div>
-    <table class="table table-hover text-center">
-      <thead class="table-dark">
-        <tr>
-          <th>設備</th>
-          <th>目前位置</th>
-          <th>累計時長</th>
-        </tr>
-      </thead>
-      <tbody id="deviceTable"></tbody>
-    </table>
+  <h1>公司設備管理</h1>
+  <div class="sub">點選任一列可編輯；敏感操作需密碼，但<u>60 秒內免重複輸入</u>。</div>
+
+  <div class="bar">
+    <button class="ok" id="btnAdd">新增設備</button>
+    <button class="pri" id="btnLoc">常態位置</button>
   </div>
 
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th data-key="name">設備 <span class="arrow" id="ar-name">↕</span></th>
+        <th data-key="location">目前位置 <span class="arrow" id="ar-location">↕</span></th>
+        <th data-key="time">累計時長 <span class="arrow" id="ar-time">↕</span></th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+
   <!-- 密碼 Modal -->
-  <div class="modal fade" id="pwdModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">輸入管理密碼</h5></div>
-        <div class="modal-body">
-          <input type="password" id="inputPwd" class="form-control" placeholder="請輸入密碼" />
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-          <button class="btn btn-primary" id="confirmPwd">確認</button>
-        </div>
+  <div class="modal" id="loginModal">
+    <div class="card">
+      <h3>輸入管理密碼</h3>
+      <div class="body">
+        <input type="password" id="pwd" placeholder="請輸入密碼" />
+        <div class="err" id="pwdErr"></div>
+      </div>
+      <div class="footer">
+        <button class="muted" id="pwdCancel">取消</button>
+        <button class="pri" id="pwdOk">確認</button>
       </div>
     </div>
   </div>
 
-  <!-- 編輯設備 Modal -->
-  <div class="modal fade" id="editModal" tabindex="-1">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">編輯設備</h5></div>
-        <div class="modal-body">
-          <input type="text" id="editName" class="form-control mb-2" placeholder="設備名稱" />
-          <input type="text" id="editLoc" class="form-control" placeholder="目前位置" />
+  <!-- 編輯/新增 Modal -->
+  <div class="modal" id="editModal">
+    <div class="card">
+      <h3 id="editTitle">新增設備</h3>
+      <div class="body">
+        <div class="row">
+          <input id="editName" placeholder="設備名稱" />
+          <input id="editLoc" placeholder="目前位置" />
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-danger" id="deleteDevice">刪除</button>
-          <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-          <button class="btn btn-primary" id="saveEdit">儲存</button>
+        <div class="row">
+          <input id="editCreatedAt" placeholder="建立時間（自動）" disabled />
+          <span class="pill" id="editRowPill" title="資料列號供後端用"></span>
         </div>
+        <div class="err" id="editErr"></div>
+      </div>
+      <div class="footer">
+        <button class="danger" id="btnDelete">刪除</button>
+        <button class="muted" id="btnCancel">取消</button>
+        <button class="pri" id="btnSave">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 常態位置 Modal -->
+  <div class="modal" id="locModal">
+    <div class="card">
+      <h3>管理常態位置</h3>
+      <div class="body">
+        <div id="locList"></div>
+        <div class="row">
+          <input id="newLoc" placeholder="新增常態位置名稱" />
+          <button class="ok" id="addLoc">新增</button>
+        </div>
+        <div class="err" id="locErr"></div>
+      </div>
+      <div class="footer">
+        <button class="muted" id="locClose">關閉</button>
       </div>
     </div>
   </div>
 
 <script>
-  // ====== 設定 ======
-  const PROXY_URL = "https://my-proxy.miyoco5566.workers.dev"; // 改成你的 Cloudflare worker
-  const TARGET_URL = "https://script.google.com/macros/s/AKfycbzFXnH7OvrIa70D6fz3c-ExZxXOtnz3bSC-EOoQA4Kko9qx2I8lhsIrKDILFscNQHmmAA/exec"; // 改成 Apps Script 部署後的 URL
-  const PASSWORD = "1234"; // 你的管理密碼
+/** ================= 基本設定（請確認） ================= **/
+const PROXY_URL  = "https://my-proxy.miyoco5566.workers.dev";
+const TARGET_URL = "https://script.google.com/macros/s/AKfycbzFXnH7OvrIa70D6fz3c-ExZxXOtnz3bSC-EOoQA4Kko9qx2I8lhsIrKDILFscNQHmmAA/exec";
+const API_URL    = `${PROXY_URL}?target=${encodeURIComponent(TARGET_URL)}`;
+// 後端 Apps Script 已提供 doGet / doPost / doPut / doDelete
+// 注意：Worker 需允許並轉發 GET,POST,PUT,DELETE,OPTIONS
 
-  let devices = [];
-  let selectedIndex = null;
-  let lastAuthTime = 0;
+// 密碼（你要的密碼：marcy95）
+const PASSWORD = "qqq";
 
-  async function fetchDevices() {
-    const resp = await fetch(`${PROXY_URL}?target=${encodeURIComponent(TARGET_URL)}`);
-    devices = await resp.json();
-    renderTable();
-  }
+/** ================= 狀態 ================= **/
+let devices = [];          // 從後端載入的資料列（含 _row）
+let normalLocations = JSON.parse(localStorage.getItem("normalLocations")||"[]");
+if (!Array.isArray(normalLocations)) normalLocations = [];
+let sortState = { name: null, location: null, time: null }; // asc/desc
+let lastAuthTime = 0;      // 60 秒免重輸
+let isAuthed = false;
+let currentEdit = null;    // { index, data }
 
-  function renderTable() {
-    const table = document.getElementById("deviceTable");
-    table.innerHTML = "";
-    devices.forEach((d, i) => {
-      const tr = document.createElement("tr");
-      tr.className = "device-row inactive";
-      tr.innerHTML = `<td>${d.name}</td><td>${d.location}</td><td>${d.createdAt || ""}</td>`;
-      tr.onclick = () => handleEditClick(i);
-      table.appendChild(tr);
-    });
-  }
+/** ================= 小工具 ================= **/
+const $ = (id)=>document.getElementById(id);
+const show = (el)=>el.style.display="flex";
+const hide = (el)=>el.style.display="none";
+const nowMs = ()=> Date.now();
 
-  // 點擊行 → 修改
-  function handleEditClick(index) {
-    selectedIndex = index;
-    checkAuth().then(ok => {
-      if (!ok) return;
-      const d = devices[index];
-      document.getElementById("editName").value = d.name;
-      document.getElementById("editLoc").value = d.location;
-      const modal = new bootstrap.Modal(document.getElementById('editModal'));
-      modal.show();
-    });
-  }
+function within60s(){ return isAuthed && (nowMs() - lastAuthTime < 60000); }
 
-  async function checkAuth() {
-    const now = Date.now();
-    if (now - lastAuthTime < 60000) return true;
-    const pwdModal = new bootstrap.Modal(document.getElementById('pwdModal'));
-    pwdModal.show();
-
-    return new Promise(resolve => {
-      const confirmBtn = document.getElementById('confirmPwd');
-      const input = document.getElementById('inputPwd');
-
-      const handler = () => {
-        if (input.value === PASSWORD) {
-          lastAuthTime = Date.now();
-          pwdModal.hide();
-          resolve(true);
-        } else {
-          alert("密碼錯誤");
-          resolve(false);
-        }
-        confirmBtn.removeEventListener("click", handler);
-      };
-
-      confirmBtn.addEventListener("click", handler);
-      input.addEventListener("keypress", e => { if (e.key === "Enter") handler(); });
-    });
-  }
-
-  // 儲存修改
-  document.getElementById('saveEdit').onclick = async () => {
-    const d = devices[selectedIndex];
-    d.name = document.getElementById('editName').value;
-    d.location = document.getElementById('editLoc').value;
-    await saveDevice(d);
-    await fetchDevices();
-    bootstrap.Modal.getInstance(document.getElementById('editModal')).hide();
+function requireAuth(next){
+  if(within60s()){ next?.(); return; }
+  // 開啟密碼視窗
+  $("pwd").value = "";
+  $("pwdErr").textContent = "";
+  show($("loginModal"));
+  const onConfirm = ()=>{
+    if($("pwd").value === PASSWORD){
+      isAuthed = true;
+      lastAuthTime = nowMs();
+      hide($("loginModal"));
+      cleanup();
+      next?.();
+    }else{
+      $("pwdErr").textContent = "密碼錯誤，請再試一次。";
+    }
   };
+  const onKey = (e)=>{ if(e.key==="Enter") onConfirm(); };
+  const onCancel = ()=>{ hide($("loginModal")); cleanup(); };
 
-  // 刪除設備
-  document.getElementById('deleteDevice').onclick = async () => {
-    // 這裡可以改成在試算表加一欄標示刪除，或直接呼叫特定刪除 API
-    alert("刪除功能請在 Apps Script 端加上 doDelete 支援");
-  };
+  $("pwdOk").onclick = onConfirm;
+  $("pwd").onkeydown = onKey;
+  $("pwdCancel").onclick = onCancel;
+
+  function cleanup(){
+    $("pwdOk").onclick = null;
+    $("pwd").onkeydown = null;
+    $("pwdCancel").onclick = null;
+  }
+}
+
+// 時長格式：dd:hh:mm:ss
+function formatDuration(ms){
+  ms = Math.max(0, Number(ms)||0);
+  let sec = Math.floor(ms/1000);
+  const days = Math.floor(sec/86400); sec%=86400;
+  const hrs  = Math.floor(sec/3600); sec%=3600;
+  const mins = Math.floor(sec/60); sec%=60;
+  const pad = (n)=>String(n).padStart(2,"0");
+  return `${pad(days)}:${pad(hrs)}:${pad(mins)}:${pad(sec)}`;
+}
+
+/** ================= 後端 API ================= **/
+async function apiGet(){
+  const r = await fetch(API_URL);
+  if(!r.ok) throw new Error("讀取失敗");
+  return r.json();
+}
+async function apiPost(payload){
+  const r = await fetch(API_URL, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+  if(!r.ok) throw new Error("新增失敗");
+  return r.json();
+}
+async function apiPut(payload){
+  const r = await fetch(API_URL, { method:"PUT", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+  if(!r.ok) throw new Error("更新失敗");
+  return r.json();
+}
+async function apiDelete(payload){
+  const r = await fetch(API_URL, { method:"DELETE", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(payload) });
+  if(!r.ok) throw new Error("刪除失敗");
+  return r.json();
+}
+
+/** ================= 資料與表格 ================= **/
+async function load(){
+  try{
+    devices = await apiGet();
+    // 確保 createdAt 是數字（毫秒）或可轉數字
+    devices.forEach(d=>{
+      if(typeof d.createdAt === "string" && /^\d+$/.test(d.createdAt)) d.createdAt = Number(d.createdAt);
+    });
+    render();
+  }catch(e){
+    console.error(e);
+    alert("讀取資料失敗，請稍後再試。");
+  }
+}
+
+function render(){
+  const tb = $("tbody");
+  tb.innerHTML = "";
+
+  // 排序
+  applySort();
+
+  devices.forEach((d, idx)=>{
+    const tr = document.createElement("tr");
+    tr.className = "editable";
+    tr.title = "點擊編輯";
+
+    // 累計時長：常態位置=顯示 N/A；其他顯示從 createdAt 累計
+    let timeCell = "N/A";
+    const loc = (d.location||"").trim();
+    if (!normalLocations.includes(loc)) {
+      const elapsed = nowMs() - (Number(d.createdAt)||0);
+      timeCell = formatDuration(elapsed);
+    }
+
+    tr.innerHTML = `
+      <td>${escapeHTML(d.name||"")}</td>
+      <td>${escapeHTML(d.location||"")}${normalLocations.includes(loc) ? ' <span class="tag">常態</span>' : ""}</td>
+      <td>${timeCell}</td>
+    `;
+
+    tr.onclick = ()=> onRowClick(idx);
+    tb.appendChild(tr);
+  });
+}
+
+function escapeHTML(s){
+  return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+
+/** ================= 排序 ================= **/
+function resetArrows(){
+  $("ar-name").textContent = "↕";
+  $("ar-location").textContent = "↕";
+  $("ar-time").textContent = "↕";
+}
+function applySort(){
+  const key = Object.keys(sortState).find(k=>sortState[k]);
+  if(!key) return; // 無排序
+
+  const dir = sortState[key]; // 'asc' | 'desc'
+  const s = dir === "asc" ? 1 : -1;
+
+  if(key === "name" || key === "location"){
+    devices.sort((a,b)=> (String(a[key]||"").localeCompare(String(b[key]||""))) * s);
+  }else if(key === "time"){
+    devices.sort((a,b)=>{
+      const aLoc = (a.location||"").trim();
+      const bLoc = (b.location||"").trim();
+      const aT = normalLocations.includes(aLoc) ? Number.POSITIVE_INFINITY : (nowMs() - (Number(a.createdAt)||0));
+      const bT = normalLocations.includes(bLoc) ? Number.POSITIVE_INFINITY : (nowMs() - (Number(b.createdAt)||0));
+      return (aT - bT) * s;
+    });
+  }
+}
+
+function toggleSort(k, arrowId){
+  // 清除其他
+  Object.keys(sortState).forEach(key=>{ if(key!==k) sortState[key]=null; });
+  // 切換 asc/desc
+  sortState[k] = sortState[k] === "asc" ? "desc" : "asc";
+  // 箭頭 UI
+  resetArrows();
+  $(arrowId).textContent = sortState[k] === "asc" ? "↑" : "↓";
+  render();
+}
+
+/** ================= 列點擊（編輯） ================= **/
+function onRowClick(index){
+  requireAuth(()=>{
+    currentEdit = { index, data: {...devices[index]} }; // shallow copy
+    $("editTitle").textContent = "編輯設備";
+    $("editName").value = currentEdit.data.name || "";
+    $("editLoc").value  = currentEdit.data.location || "";
+    $("editCreatedAt").value = currentEdit.data.createdAt ? new Date(Number(currentEdit.data.createdAt)).toLocaleString("zh-TW",{hour12:false}) : "";
+    $("editRowPill").textContent = currentEdit.data._row ? `列：${currentEdit.data._row}` : "";
+    $("editErr").textContent = "";
+    show($("editModal"));
+  });
+}
+
+/** ================= 事件繫結 ================= **/
+window.addEventListener("DOMContentLoaded", ()=>{
+  // 排序
+  document.querySelectorAll("#tbl thead th").forEach(th=>{
+    th.addEventListener("click", ()=>{
+      const key = th.getAttribute("data-key");
+      if(key==="name") toggleSort("name","ar-name");
+      if(key==="location") toggleSort("location","ar-location");
+      if(key==="time") toggleSort("time","ar-time");
+    });
+  });
 
   // 新增設備
-  document.getElementById('btnAdd').onclick = async () => {
-    const ok = await checkAuth();
-    if (!ok) return;
-    const name = prompt("輸入設備名稱");
-    if (!name) return;
-    const loc = prompt("輸入目前位置");
-    if (!loc) return;
-    await saveDevice({name, location: loc, createdAt: new Date().toLocaleString()});
-    fetchDevices();
+  $("btnAdd").onclick = ()=>{
+    requireAuth(()=>{
+      currentEdit = { index: -1, data: {_row:null,name:"",location:"",createdAt: nowMs()} };
+      $("editTitle").textContent = "新增設備";
+      $("editName").value = "";
+      $("editLoc").value = "";
+      $("editCreatedAt").value = new Date(currentEdit.data.createdAt).toLocaleString("zh-TW",{hour12:false});
+      $("editRowPill").textContent = "";
+      $("editErr").textContent = "";
+      show($("editModal"));
+    });
   };
 
-  async function saveDevice(data) {
-    await fetch(`${PROXY_URL}?target=${encodeURIComponent(TARGET_URL)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
+  // 儲存（新增/更新）
+  $("btnSave").onclick = async ()=>{
+    const name = $("editName").value.trim();
+    const location = $("editLoc").value.trim();
+    if(!name){ $("editErr").textContent="設備名稱必填"; return; }
+    try{
+      if(currentEdit.index === -1){
+        // 新增
+        await apiPost({ name, location, createdAt: nowMs() });
+      }else{
+        // 更新
+        const original = devices[currentEdit.index];
+        await apiPut({ _row: original._row, name, location, createdAt: original.createdAt });
+      }
+      hide($("editModal"));
+      await load();
+    }catch(e){
+      $("editErr").textContent = e.message || "儲存失敗";
+    }
+  };
+
+  // 刪除
+  $("btnDelete").onclick = async ()=>{
+    if(currentEdit?.index === -1){ $("editErr").textContent="尚未建立無法刪除"; return; }
+    try{
+      const original = devices[currentEdit.index];
+      await apiDelete({ _row: original._row });
+      hide($("editModal"));
+      await load();
+    }catch(e){
+      $("editErr").textContent = e.message || "刪除失敗";
+    }
+  };
+
+  // 編輯視窗取消
+  $("btnCancel").onclick = ()=> hide($("editModal"));
+
+  // 常態位置
+  $("btnLoc").onclick = ()=>{
+    requireAuth(()=> openLocModal());
+  };
+  $("locClose").onclick = ()=> hide($("locModal"));
+  $("addLoc").onclick = ()=>{
+    const val = $("newLoc").value.trim();
+    if(!val) return;
+    if(!normalLocations.includes(val)){
+      normalLocations.push(val);
+      localStorage.setItem("normalLocations", JSON.stringify(normalLocations));
+      $("newLoc").value = "";
+      renderLocList(); render();
+    }
+  };
+
+  // 密碼視窗 Enter
+  $("pwd").addEventListener("keydown", (e)=>{ if(e.key==="Enter") $("pwdOk").click(); });
+
+  // 初次載入
+  renderLocList();
+  load();
+});
+
+/** ================= 常態位置 Modal ================= **/
+function openLocModal(){ renderLocList(); $("locErr").textContent=""; show($("locModal")); }
+function renderLocList(){
+  const box = $("locList");
+  box.innerHTML = "";
+  if(normalLocations.length===0){
+    box.innerHTML = `<div class="err" style="color:#6b7280">尚無常態位置，請新增。</div>`;
+    return;
   }
-
-  fetchDevices();
+  normalLocations.forEach((loc, i)=>{
+    const row = document.createElement("div");
+    row.className = "loc-item";
+    row.innerHTML = `
+      <span>${escapeHTML(loc)}</span>
+      <span>
+        <button class="muted" data-action="apply">套用到全部</button>
+        <button class="danger" data-action="del">刪除</button>
+      </span>
+    `;
+    row.querySelector('[data-action="del"]').onclick = ()=>{
+      normalLocations.splice(i,1);
+      localStorage.setItem("normalLocations", JSON.stringify(normalLocations));
+      renderLocList(); render();
+    };
+    row.querySelector('[data-action="apply"]').onclick = ()=>{
+      requireAuth(async ()=>{
+        // 將所有設備位置更新為此常態位置
+        for(const d of devices){
+          await apiPut({ _row: d._row, name: d.name, location: loc, createdAt: d.createdAt });
+        }
+        load();
+      });
+    };
+    box.appendChild(row);
+  });
+}
 </script>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
