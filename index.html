@@ -1,217 +1,179 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>公司設備管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <style>
-    body {font-family:"Microsoft JhengHei",sans-serif;background:#f7f9fc;margin:0;padding:20px;}
-    h1{text-align:center;color:#333;}
-    table{width:100%;border-collapse:collapse;background:white;margin-top:20px;}
-    th,td{border:1px solid #ddd;padding:10px;text-align:center;}
-    th{background:#f0f0f0;cursor:pointer;}
-    tr.highlight {background:#e0e0e0;}
-    .btn-area{text-align:center;margin-top:15px;}
-    .btn-area button{padding:8px 15px;background:#4caf50;color:white;border:none;border-radius:5px;cursor:pointer;margin:0 8px;}
-    #editModal,#locationModal,#loginModal{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:white;padding:20px;border-radius:8px;box-shadow:0 0 10px rgba(0,0,0,.3);}
-    #editModal input,#locationModal input,#loginModal input{margin:5px 0;padding:6px;width:100%;}
-    #editModal button,#locationModal button,#loginModal button{margin-top:10px;padding:6px 12px;}
-    .location-item{display:flex;justify-content:space-between;align-items:center;background:#f5f5f5;padding:5px 10px;margin:3px 0;border-radius:4px;}
-    .delete-loc{background:red;color:white;border:none;padding:2px 6px;border-radius:4px;cursor:pointer;}
+    body { font-family: "Microsoft JhengHei", sans-serif; background: #f9fafb; margin: 0; padding: 0; }
+    h1 { text-align: center; margin: 30px 0 10px; }
+    p.subtext { text-align: center; color: #666; margin: 0 0 20px; }
+    .btn-bar { text-align: center; margin-bottom: 15px; }
+    button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; margin: 0 4px; }
+    button.add { background: #4caf50; color: #fff; }
+    button.location { background: #3b82f6; color: #fff; }
+    table { width: 90%; max-width: 900px; margin: auto; border-collapse: collapse; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);}
+    th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+    th { cursor: pointer; user-select: none; background: #f3f4f6; }
+    tr.disabled { color: #999; background: #f9f9f9; }
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; }
+    .modal-content { background: #fff; padding: 20px; border-radius: 8px; width: 320px; }
+    .modal input { width: 100%; padding: 6px; margin-bottom: 10px; }
+    .modal-footer { text-align: right; }
+    .badge { background: #3b82f6; color: #fff; padding: 3px 6px; border-radius: 4px; font-size: 12px; }
   </style>
 </head>
 <body>
   <h1>公司設備管理</h1>
-  <div class="btn-area">
-    <button id="addDeviceBtn">新增設備</button>
-    <button id="manageLocBtn">常態位置</button>
+  <p class="subtext">點選任一列可編輯，敏感操作需密碼，但60秒內免重輸入</p>
+  <div class="btn-bar">
+    <button class="add" id="addDeviceBtn">新增設備</button>
+    <button class="location" id="setDefaultLocation">常態位置</button>
   </div>
 
   <table id="deviceTable">
     <thead>
       <tr>
-        <th onclick="sortTable('name')">設備 ⬍</th>
-        <th onclick="sortTable('location')">目前位置 ⬍</th>
-        <th onclick="sortTable('time')">累計時長 ⬍</th>
+        <th data-key="name">設備</th>
+        <th data-key="location">目前位置</th>
+        <th>累計時長</th>
       </tr>
     </thead>
-    <tbody id="deviceBody"></tbody>
+    <tbody></tbody>
   </table>
 
-  <!-- 新增/修改設備彈窗 -->
-  <div id="editModal">
-    <h3>編輯設備</h3>
-    <label>設備名稱：</label><br>
-    <input type="text" id="editName"><br>
-    <label>目前位置：</label><br>
-    <input type="text" id="editLocation"><br>
-    <button onclick="saveEdit()">儲存</button>
-    <button onclick="deleteDevice()">刪除</button>
-    <button onclick="closeModal()">取消</button>
+  <!-- Modal for add/edit -->
+  <div class="modal" id="deviceModal">
+    <div class="modal-content">
+      <h3 id="modalTitle">新增設備</h3>
+      <input type="text" id="deviceName" placeholder="設備名稱">
+      <input type="text" id="deviceLocation" placeholder="目前位置">
+      <div id="passwordBlock">
+        <input type="password" id="devicePassword" placeholder="請輸入密碼">
+      </div>
+      <div class="modal-footer">
+        <button id="saveBtn">保存</button>
+        <button id="deleteBtn" style="background:red;color:white;display:none;">刪除</button>
+        <button id="cancelBtn">取消</button>
+      </div>
+    </div>
   </div>
 
-  <!-- 常態位置管理 -->
-  <div id="locationModal">
-    <h3>管理常態位置</h3>
-    <div id="locationList"></div>
-    <input type="text" id="newLoc" placeholder="新增位置名稱">
-    <button onclick="addLocation()">新增</button>
-    <button onclick="closeLocationModal()">關閉</button>
-  </div>
+<script>
+const PROXY_URL = "https://my-proxy.miyoco5566.workers.dev";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzFXnH7OvrIa70D6fz3c-ExZxXOtnz3bSC-EOoQA4Kko9qx2I8lhsIrKDILFscNQHmmAA/exec";
+let devices = [];
+let passwordValidatedUntil = 0;
+let currentEdit = null;
+let sortKey = null;
+let sortAsc = true;
 
-  <!-- 密碼登入 -->
-  <div id="loginModal">
-    <h3>請輸入密碼</h3>
-    <input type="password" id="passwordInput" placeholder="輸入密碼" onkeydown="if(event.key==='Enter'){checkPassword();}">
-    <button onclick="checkPassword()">確認</button>
-    <button onclick="closeLoginModal()">取消</button>
-  </div>
+async function loadDevices() {
+  const res = await fetch(`${PROXY_URL}?target=${SCRIPT_URL}`);
+  devices = await res.json();
+  renderTable();
+}
 
-  <script>
-    const PASSWORD = "aaa";
-    const PROXY_URL  = "https://my-proxy.miyoco5566.workers.dev";
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzFXnH7OvrIa70D6fz3c-ExZxXOtnz3bSC-EOoQA4Kko9qx2I8lhsIrKDILFscNQHmmAA/exec";
+function renderTable() {
+  const tbody = $("#deviceTable tbody");
+  tbody.empty();
+  devices.forEach(d => {
+    const row = $("<tr>").toggleClass("disabled", Date.now() > passwordValidatedUntil);
+    row.append($("<td>").text(d["設備"] || d.name));
+    let locTd = $("<td>");
+    locTd.text(d["目前位置"] || d.location);
+    if (d.default) locTd.append($("<span>").addClass("badge").text("常"));
+    row.append(locTd);
+    row.append($("<td>").text(calcDuration(d.createdAt || d["建立時間"])));
+    row.on("click", () => openEdit(d));
+    tbody.append(row);
+  });
+}
 
-    let isLoggedIn = false;
-    let lastLogin = 0;
-    let devices = [];
-    let normalLocations = JSON.parse(localStorage.getItem("normalLocations")) || [];
-    if (!Array.isArray(normalLocations)) normalLocations = [];
-    let sortState = {name:'asc',location:'asc',time:'asc'};
-    let editingDevice = null;
+function calcDuration(startTime) {
+  if (!startTime || startTime === "N/A") return "N/A";
+  const start = new Date(startTime);
+  if (isNaN(start)) return "N/A";
+  let diff = Date.now() - start.getTime();
+  let hours = Math.floor(diff / 3600000);
+  let minutes = Math.floor(diff / 60000) % 60;
+  let seconds = Math.floor(diff / 1000) % 60;
+  return `${hours.toString().padStart(2,"0")}:${minutes.toString().padStart(2,"0")}:${seconds.toString().padStart(2,"0")}`;
+}
 
-    const addBtn = document.getElementById('addDeviceBtn');
-    const locBtn = document.getElementById('manageLocBtn');
-    const body = document.getElementById('deviceBody');
-    const modal = document.getElementById('editModal');
-    const editName = document.getElementById('editName');
-    const editLocation = document.getElementById('editLocation');
-    const locModal = document.getElementById('locationModal');
-    const locList = document.getElementById('locationList');
-    const newLocInput = document.getElementById('newLoc');
-    const loginModal = document.getElementById('loginModal');
-    const passwordInput = document.getElementById('passwordInput');
+$("#deviceTable th").on("click", function(){
+  const key = $(this).data("key");
+  if (!key) return;
+  sortAsc = sortKey === key ? !sortAsc : true;
+  sortKey = key;
+  devices.sort((a,b)=>{
+    const va = a[key] || a["設備"] || "";
+    const vb = b[key] || b["設備"] || "";
+    return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  renderTable();
+});
 
-    async function apiPost(payload) {
-      const url = `${PROXY_URL}?target=${encodeURIComponent(SCRIPT_URL)}`;
-      const res = await fetch(url,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload)
-      });
-      if(!res.ok) throw new Error(await res.text());
-      return res.json();
-    }
+$("#addDeviceBtn").on("click", ()=> openEdit(null));
+$("#cancelBtn").on("click", ()=> $("#deviceModal").hide());
+$("#saveBtn").on("click", saveDevice);
+$("#deleteBtn").on("click", deleteDevice);
 
-    async function fetchDevices() {
-      const url = `${PROXY_URL}?target=${encodeURIComponent(SCRIPT_URL)}`;
-      const res = await fetch(url);
-      devices = await res.json();
-      render();
-    }
+function openEdit(data){
+  currentEdit = data;
+  $("#modalTitle").text(data ? "編輯設備" : "新增設備");
+  $("#deviceName").val(data ? (data.設備||data.name) : "");
+  $("#deviceLocation").val(data ? (data.目前位置||data.location) : "");
+  $("#passwordBlock").toggle(Date.now() > passwordValidatedUntil);
+  $("#deleteBtn").toggle(!!data);
+  $("#deviceModal").show();
+}
 
-    function formatDuration(ms){
-      let sec = Math.floor(ms/1000);
-      let days = Math.floor(sec / 86400);
-      sec %= 86400;
-      let hrs = Math.floor(sec / 3600);
-      sec %= 3600;
-      let mins = Math.floor(sec / 60);
-      sec %= 60;
-      return `${String(days).padStart(2,'0')}:${String(hrs).padStart(2,'0')}:${String(mins).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
-    }
+async function saveDevice(){
+  const name = $("#deviceName").val().trim();
+  const location = $("#deviceLocation").val().trim();
+  if (!name) return alert("請輸入設備名稱");
 
-    function render(){
-      body.innerHTML='';
-      devices.forEach(d=>{
-        const tr=document.createElement('tr');
-        tr.onclick=()=>editDevice(d);
-        let timeCell=normalLocations.includes((d.location||"").trim())?"N/A":formatDuration(Date.now()-d.createdAt);
-        tr.innerHTML=`<td>${d.name}</td><td>${d.location||""}</td><td>${timeCell}</td>`;
-        body.appendChild(tr);
-      });
-    }
+  const needPwd = Date.now() > passwordValidatedUntil;
+  if(needPwd){
+    const pwd = $("#devicePassword").val();
+    if(pwd !== "1234") return alert("密碼錯誤"); // 這裡可以換成你的密碼驗證
+    passwordValidatedUntil = Date.now() + 60000;
+  }
 
-    function sortTable(key){
-      let direction = sortState[key]==='asc'?1:-1;
-      if(key==='name'||key==='location'){
-        devices.sort((a,b)=>(a[key]||"").localeCompare(b[key]||"")*direction);
-      }else{
-        devices.sort((a,b)=>{
-          const ta=normalLocations.includes((a.location||"").trim())?Infinity:(Date.now()-a.createdAt);
-          const tb=normalLocations.includes((b.location||"").trim())?Infinity:(Date.now()-b.createdAt);
-          return (ta-tb)*direction;
-        });
-      }
-      sortState[key]=sortState[key]==='asc'?'desc':'asc';
-      render();
-    }
+  if(!currentEdit){
+    await apiPost({action:"create",name,location,createdAt:new Date().toISOString()});
+  } else {
+    await apiPost({
+      action:"update",
+      oldName: currentEdit.設備||currentEdit.name,
+      name, location,
+      createdAt:new Date().toISOString()
+    });
+  }
+  $("#deviceModal").hide();
+  loadDevices();
+}
 
-    addBtn.onclick=()=>{checkLogin(openAddModal)};
-    locBtn.onclick=()=>{checkLogin(openLocModal)};
+async function deleteDevice(){
+  if(!confirm("確定要刪除嗎？")) return;
+  const name = $("#deviceName").val().trim();
+  await apiPost({action:"delete",name});
+  $("#deviceModal").hide();
+  loadDevices();
+}
 
-    function checkLogin(next){
-      if(isLoggedIn && Date.now()-lastLogin<60000){next();return;}
-      window.afterLoginSuccess=next;
-      loginModal.style.display="block";
-      passwordInput.value='';
-    }
-    function checkPassword(){
-      if(passwordInput.value===PASSWORD){
-        isLoggedIn=true;lastLogin=Date.now();
-        loginModal.style.display="none";
-        if(window.afterLoginSuccess)window.afterLoginSuccess();
-      }else alert("❌ 密碼錯誤");
-    }
-    function closeLoginModal(){loginModal.style.display="none";}
+async function apiPost(payload){
+  await fetch(`${PROXY_URL}?target=${SCRIPT_URL}`,{
+    method:"POST",
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+}
 
-    function openAddModal(){editingDevice=null;editName.value='';editLocation.value='';modal.style.display="block";}
-    function editDevice(d){checkLogin(()=>{editingDevice=d;editName.value=d.name;editLocation.value=d.location;modal.style.display="block";});}
-    async function saveEdit(){
-      const name=editName.value.trim();
-      const loc=editLocation.value.trim();
-      if(!name)return alert("設備名稱必填");
-      if(editingDevice){
-        await apiPost({action:'update',oldName:editingDevice.name,name,location:loc,createdAt:Date.now()});
-      }else{
-        await apiPost({action:'create',name,location:loc,createdAt:Date.now()});
-      }
-      modal.style.display="none";fetchDevices();
-    }
-    async function deleteDevice(){
-      if(!editingDevice)return;
-      if(!confirm("確定刪除？"))return;
-      await apiPost({action:'delete',name:editingDevice.name});
-      modal.style.display="none";fetchDevices();
-    }
-    function closeModal(){modal.style.display="none";}
-
-    function openLocModal(){renderLocList();locModal.style.display="block";}
-    function renderLocList(){
-      locList.innerHTML='';
-      normalLocations.forEach((loc,i)=>{
-        const div=document.createElement('div');
-        div.className='location-item';
-        div.innerHTML=`<span>${loc}</span><button class="delete-loc" onclick="deleteLocation(${i})">刪除</button>`;
-        locList.appendChild(div);
-      });
-    }
-    function addLocation(){
-      const val=newLocInput.value.trim();if(!val)return;
-      if(!normalLocations.includes(val)){
-        normalLocations.push(val);
-        localStorage.setItem("normalLocations",JSON.stringify(normalLocations));
-        renderLocList();render();
-      }
-      newLocInput.value='';
-    }
-    function deleteLocation(i){
-      normalLocations.splice(i,1);
-      localStorage.setItem("normalLocations",JSON.stringify(normalLocations));
-      renderLocList();render();
-    }
-    function closeLocationModal(){locModal.style.display="none";}
-
-    fetchDevices();
-  </script>
+setInterval(renderTable,1000);
+loadDevices();
+</script>
 </body>
 </html>
