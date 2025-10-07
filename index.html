@@ -166,17 +166,29 @@
 
     function openAddModal(){editingDevice=null;editName.value='';editLocation.value='';modal.style.display="block";}
     function editDevice(d){checkLogin(()=>{editingDevice=d;editName.value=d.name;editLocation.value=d.location;modal.style.display="block";});}
+
+    // ⚡️關鍵改動：判斷是否要重置 createdAt
     async function saveEdit(){
       const name=editName.value.trim();
       const loc=editLocation.value.trim();
       if(!name)return alert("設備名稱必填");
+
       if(editingDevice){
-        await apiPost({action:'update',oldName:editingDevice.name,name,location:loc,createdAt:Date.now()});
+        // 判斷位置是否有變
+        const locationChanged = editingDevice.location !== loc;
+        await apiPost({
+          action:'update',
+          oldName:editingDevice.name,
+          name,
+          location:loc,
+          resetTime: locationChanged // 告訴後端是否要重置時間
+        });
       }else{
         await apiPost({action:'create',name,location:loc,createdAt:Date.now()});
       }
       modal.style.display="none";fetchDevices();
     }
+
     async function deleteDevice(){
       if(!editingDevice)return;
       if(!confirm("確定刪除？"))return;
