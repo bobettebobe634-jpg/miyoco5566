@@ -103,11 +103,14 @@
     }
 
     async function fetchDevices() {
-      const url = `${PROXY_URL}?target=${encodeURIComponent(SCRIPT_URL)}`;
-      const res = await fetch(url);
-      devices = await res.json();
-      render();
-    }
+  const url = `${PROXY_URL}?target=${encodeURIComponent(SCRIPT_URL)}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  devices = data.devices;
+  normalLocations = data.locations || [];
+  render();
+}
+
 
     function formatDuration(ms){
       let sec = Math.floor(ms/1000);
@@ -207,20 +210,30 @@
         locList.appendChild(div);
       });
     }
-    function addLocation(){
-      const val=newLocInput.value.trim();if(!val)return;
-      if(!normalLocations.includes(val)){
-        normalLocations.push(val);
-        localStorage.setItem("normalLocations",JSON.stringify(normalLocations));
-        renderLocList();render();
-      }
-      newLocInput.value='';
-    }
-    function deleteLocation(i){
-      normalLocations.splice(i,1);
-      localStorage.setItem("normalLocations",JSON.stringify(normalLocations));
-      renderLocList();render();
-    }
+    // ⚡️新增：同步常態位置到 Google Sheet
+async function syncLocations() {
+  await apiPost({action:'updateLocations', locations: normalLocations});
+}
+
+// 取代原本的 addLocation()
+async function addLocation(){
+  const val=newLocInput.value.trim();if(!val)return;
+  if(!normalLocations.includes(val)){
+    normalLocations.push(val);
+    localStorage.setItem("normalLocations",JSON.stringify(normalLocations));
+    await syncLocations();  // 同步到 Google Sheet
+    renderLocList();render();
+  }
+  newLocInput.value='';
+}
+
+// 取代原本的 deleteLocation()
+async function deleteLocation(i){
+  normalLocations.splice(i,1);
+  localStorage.setItem("normalLocations",JSON.stringify(normalLocations));
+  await syncLocations();  // 同步到 Google Sheet
+  renderLocList();render();
+}
     function closeLocationModal(){locModal.style.display="none";}
 
     fetchDevices();
